@@ -343,9 +343,33 @@ export class MindMapPlugin implements IPluginV2 {
     const target = this.ctx.store.getNode(targetId);
     if (!dragged || !target || dragged.type !== 'mindmap' || target.type !== 'mindmap') return;
 
+    if (this.isDescendant(draggedId, targetId)) return;
+
     const oldParentId = dragged.parentId;
-    const newParentId = position === 'child' ? targetId : target.parentId;
-    if (!newParentId || newParentId === draggedId) return;
+    const oldParent = oldParentId ? this.ctx.store.getNode(oldParentId) : null;
+    const oldChildIndex = oldParent ? (oldParent.children || []).indexOf(draggedId) : -1;
+
+    let newParentId: string;
+    let insertIndex: number;
+
+    if (position === 'child') {
+      newParentId = targetId;
+      const targetNode = this.ctx.store.getNode(targetId)!;
+      insertIndex = (targetNode.children || []).length;
+    } else {
+      if (!target.parentId) return;
+      newParentId = target.parentId;
+      const parentNode = this.ctx.store.getNode(newParentId)!;
+      const siblings = parentNode.children || [];
+      const targetIndex = siblings.indexOf(targetId);
+      insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+
+      if (oldParentId === newParentId && oldChildIndex < insertIndex) {
+        insertIndex--;
+      }
+    }
+
+    if (newParentId === draggedId) return;
 
     const oldEdge = Object.values(this.ctx.store.getDocument().edges)
       .find(e => e.type === 'mindmap' && e.targetId === draggedId);
@@ -369,9 +393,9 @@ export class MindMapPlugin implements IPluginV2 {
         this.ctx.store.updateNode(draggedId, { parentId: newParentId });
         const newP = this.ctx.store.getNode(newParentId);
         if (newP) {
-          this.ctx.store.updateNode(newParentId, {
-            children: [...(newP.children || []), draggedId],
-          });
+          const children = (newP.children || []).filter(c => c !== draggedId);
+          children.splice(insertIndex, 0, draggedId);
+          this.ctx.store.updateNode(newParentId, { children });
         }
         this.ctx.store.addEdge({
           id: newEdgeId,
@@ -395,9 +419,13 @@ export class MindMapPlugin implements IPluginV2 {
         if (oldParentId) {
           const oldP = this.ctx.store.getNode(oldParentId);
           if (oldP) {
-            this.ctx.store.updateNode(oldParentId, {
-              children: [...(oldP.children || []), draggedId],
-            });
+            const children = [...(oldP.children || [])];
+            if (oldChildIndex >= 0 && oldChildIndex <= children.length) {
+              children.splice(oldChildIndex, 0, draggedId);
+            } else {
+              children.push(draggedId);
+            }
+            this.ctx.store.updateNode(oldParentId, { children });
           }
         }
         if (oldEdge) this.ctx.store.addEdge(oldEdge);
@@ -406,6 +434,14 @@ export class MindMapPlugin implements IPluginV2 {
       },
     };
     this.ctx.commandHistory.execute(cmd);
+  }
+
+  private isDescendant(ancestorId: string, nodeId: string): boolean {
+    const node = this.ctx.store.getNode(nodeId);
+    if (!node) return false;
+    if (node.parentId === ancestorId) return true;
+    if (node.parentId) return this.isDescendant(ancestorId, node.parentId);
+    return false;
   }
 
   relayout(): void {

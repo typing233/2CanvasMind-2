@@ -91,6 +91,10 @@ export default function App() {
 
   const handleMarketplaceOpen = useCallback(() => setMarketplaceOpen(true), []);
   const handleMarketplaceClose = useCallback(() => setMarketplaceOpen(false), []);
+  const handleConversionDone = useCallback(() => {
+    const mindmap = pluginManager.getAll().find(p => p.id === 'mindmap') as MindMapPlugin | undefined;
+    mindmap?.relayout();
+  }, [pluginManager]);
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden">
@@ -105,7 +109,7 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden relative">
         <CanvasContainer viewport={viewport} plugins={pluginManager} commandHistory={commandHistory} />
         <StylePanel commandHistory={commandHistory} />
-        <ContextMenu commandHistory={commandHistory} />
+        <ContextMenu commandHistory={commandHistory} onConversionDone={handleConversionDone} />
         <MarkdownPanel syncEngine={syncEngine} />
       </div>
       {marketplaceOpen && (

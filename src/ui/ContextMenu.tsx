@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useCanvasStore } from '../core/data-model/store';
-import { CanvasNode, NodeId } from '../core/data-model/types';
+import { NodeId } from '../core/data-model/types';
 import { CommandHistory } from '../core/commands/CommandHistory';
 import { ICommand } from '../core/commands/Command';
 import { genId } from '../utils/id';
@@ -9,6 +9,7 @@ import { t } from '../i18n';
 
 interface ContextMenuProps {
   commandHistory: CommandHistory;
+  onConversionDone?: () => void;
 }
 
 interface MenuState {
@@ -17,16 +18,15 @@ interface MenuState {
   nodeId: NodeId;
 }
 
-export function ContextMenu({ commandHistory }: ContextMenuProps) {
+export function ContextMenu({ commandHistory, onConversionDone }: ContextMenuProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
-  const selectedNodeIds = useCanvasStore((s) => s.selectedNodeIds);
   const nodes = useCanvasStore((s) => s.document.nodes);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       e.preventDefault();
       const ids = Array.from(useCanvasStore.getState().selectedNodeIds);
-      if (ids.length === 1) {
+      if (ids.length >= 1) {
         setMenu({ x: e.clientX, y: e.clientY, nodeId: ids[0] });
       }
     };
@@ -74,40 +74,48 @@ export function ContextMenu({ commandHistory }: ContextMenuProps) {
   const handleConvert = useCallback((toPrefix: string) => {
     if (!menu) return;
     const store = useCanvasStore.getState();
-    const node = store.getNode(menu.nodeId);
-    if (!node) return;
+    const selectedIds = Array.from(store.selectedNodeIds);
+    const selectedNodes = selectedIds.map(id => store.getNode(id)).filter(Boolean) as any[];
+    if (selectedNodes.length === 0) return;
 
-    const fromPrefix = node.type.split('-')[0];
+    const fromPrefix = selectedNodes[0].type.split('-')[0];
     const converter = getConverter(fromPrefix, toPrefix);
     if (!converter) return;
 
-    const result = converter(node);
-    const oldEdges = Object.values(store.document.edges)
-      .filter((e) => e.sourceId === node.id || e.targetId === node.id);
+    const relatedEdges = Object.values(store.document.edges)
+      .filter(e => selectedIds.includes(e.sourceId) || selectedIds.includes(e.targetId));
+
+    const result = converter(selectedNodes, relatedEdges, store.document.nodes, store.document.edges);
+
+    const savedNodes = result.removedNodeIds.map(id => ({ ...store.document.nodes[id] })).filter(Boolean);
+    const savedEdges = result.removedEdgeIds.map(id => ({ ...store.document.edges[id] })).filter(Boolean);
 
     const cmd: ICommand = {
       id: genId(),
       description: `Convert to ${toPrefix}`,
       execute: () => {
         const s = useCanvasStore.getState();
-        for (const e of oldEdges) s.removeEdge(e.id);
-        s.removeNode(node.id);
-        s.addNode(result.node);
+        for (const eid of result.removedEdgeIds) s.removeEdge(eid);
+        for (const nid of result.removedNodeIds) s.removeNode(nid);
+        for (const n of result.nodes) s.addNode(n);
         for (const e of result.edges) s.addEdge(e);
-        s.setSelection([result.node.id]);
+        if (result.nodes.length > 0) {
+          s.setSelection([result.nodes[0].id]);
+        }
       },
       undo: () => {
         const s = useCanvasStore.getState();
         for (const e of result.edges) s.removeEdge(e.id);
-        s.removeNode(result.node.id);
-        s.addNode(node);
-        for (const e of oldEdges) s.addEdge(e);
-        s.setSelection([node.id]);
+        for (const n of result.nodes) s.removeNode(n.id);
+        for (const n of savedNodes) s.addNode(n as any);
+        for (const e of savedEdges) s.addEdge(e as any);
+        if (selectedIds.length > 0) s.setSelection(selectedIds);
       },
     };
     commandHistory.execute(cmd);
     setMenu(null);
-  }, [menu, commandHistory]);
+    onConversionDone?.();
+  }, [menu, commandHistory, onConversionDone]);
 
   const handleLock = useCallback(() => {
     if (!menu) return;

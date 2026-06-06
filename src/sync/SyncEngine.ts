@@ -23,6 +23,9 @@ export class SyncEngine {
   private updating: 'md' | 'canvas' | null = null;
   private syncMap: SyncMapEntry[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private canvasDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastCanvasHash = '';
+  private onCanvasToMdCallback: ((md: string) => void) | null = null;
 
   constructor(
     store: CanvasStore,
@@ -34,6 +37,13 @@ export class SyncEngine {
     this.commandHistory = commandHistory;
     this.eventBus = eventBus;
     this.mindmapPlugin = mindmapPlugin;
+
+    this.eventBus.on('sync:canvas-updated', () => this.scheduleCanvasToMd());
+    this.eventBus.on('render:request', () => this.scheduleCanvasToMd());
+  }
+
+  setCanvasToMdCallback(cb: ((md: string) => void) | null): void {
+    this.onCanvasToMdCallback = cb;
   }
 
   onMarkdownChanged(md: string): void {
@@ -56,27 +66,16 @@ export class SyncEngine {
   }
 
   generateMarkdownFromCanvas(): string {
-    this.updating = 'canvas';
-    try {
-      const rootId = this.mindmapPlugin.getRootId();
-      if (!rootId) return '';
-      const nodes = this.store.getDocument().nodes;
-      const mdTree = mindmapToMdTree(rootId, nodes);
-      const md = serializeTreeToMarkdown(mdTree);
-      return md;
-    } finally {
-      this.updating = null;
-    }
+    const rootId = this.mindmapPlugin.getRootId();
+    if (!rootId) return '';
+    const nodes = this.store.getDocument().nodes;
+    const mdTree = mindmapToMdTree(rootId, nodes);
+    return serializeTreeToMarkdown(mdTree);
   }
 
   generateFlowchartMarkdown(): string {
-    this.updating = 'canvas';
-    try {
-      const doc = this.store.getDocument();
-      return serializeFlowchartToMarkdown(doc.nodes, doc.edges);
-    } finally {
-      this.updating = null;
-    }
+    const doc = this.store.getDocument();
+    return serializeFlowchartToMarkdown(doc.nodes, doc.edges);
   }
 
   rebuildSyncMap(editorMd: string): void {
@@ -97,6 +96,46 @@ export class SyncEngine {
   getLineForNodeId(nodeId: string): number | null {
     const entry = this.syncMap.find((e) => e.nodeId === nodeId);
     return entry !== undefined ? entry.line : null;
+  }
+
+  private scheduleCanvasToMd(): void {
+    if (this.updating === 'md') return;
+    if (!this.onCanvasToMdCallback) return;
+
+    if (this.canvasDebounceTimer) clearTimeout(this.canvasDebounceTimer);
+    this.canvasDebounceTimer = setTimeout(() => {
+      this.pushCanvasToMarkdown();
+    }, 200);
+  }
+
+  private pushCanvasToMarkdown(): void {
+    if (this.updating === 'md') return;
+    if (!this.onCanvasToMdCallback) return;
+
+    const rootId = this.mindmapPlugin.getRootId();
+    if (!rootId) return;
+
+    const nodes = this.store.getDocument().nodes;
+    const mindmapNodes = Object.values(nodes).filter(n => n.type === 'mindmap');
+    if (mindmapNodes.length === 0) return;
+
+    const hash = this.computeHash(mindmapNodes);
+    if (hash === this.lastCanvasHash) return;
+    this.lastCanvasHash = hash;
+
+    this.updating = 'canvas';
+    try {
+      const mdTree = mindmapToMdTree(rootId, nodes);
+      const md = serializeTreeToMarkdown(mdTree);
+      this.onCanvasToMdCallback(md);
+      this.syncMap = buildSyncMapFromEditorContent(md, nodes, rootId);
+    } finally {
+      this.updating = null;
+    }
+  }
+
+  private computeHash(nodes: CanvasNode[]): string {
+    return nodes.map(n => `${n.id}:${n.data.text}:${(n.children||[]).join(',')}`).sort().join('|');
   }
 
   private rebuildMindmapFromTree(tree: MdTreeNode, editorMd: string): void {
@@ -168,6 +207,7 @@ export class SyncEngine {
         }
         this.mindmapPlugin.relayout();
         this.syncMap = lineMap;
+        this.lastCanvasHash = this.computeHash(newNodes);
         this.eventBus.emit('sync:canvas-updated');
       },
       undo: () => {
@@ -177,6 +217,7 @@ export class SyncEngine {
         for (const e of removedEdges) this.store.addEdge(e);
         this.mindmapPlugin.relayout();
         this.syncMap = [];
+        this.lastCanvasHash = '';
         this.eventBus.emit('sync:canvas-updated');
       },
     };

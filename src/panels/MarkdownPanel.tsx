@@ -53,7 +53,21 @@ export function MarkdownPanel({ syncEngine }: Props) {
 
     viewRef.current = view;
 
+    if (syncEngine) {
+      syncEngine.setCanvasToMdCallback((md: string) => {
+        if (!viewRef.current || isUpdatingRef.current) return;
+        isUpdatingRef.current = true;
+        const v = viewRef.current;
+        v.dispatch({
+          changes: { from: 0, to: v.state.doc.length, insert: md },
+        });
+        syncEngine.rebuildSyncMap(md);
+        isUpdatingRef.current = false;
+      });
+    }
+
     return () => {
+      syncEngine?.setCanvasToMdCallback(null);
       view.destroy();
       viewRef.current = null;
     };
