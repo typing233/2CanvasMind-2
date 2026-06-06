@@ -62,7 +62,7 @@ export class SyncEngine {
     const rootId = this.mindmapPlugin.getRootId();
     if (!rootId) return '';
 
-    const nodes = this.store.document.nodes;
+    const nodes = this.store.getDocument().nodes;
     const mdTree = mindmapToMdTree(rootId, nodes);
     const md = serializeTreeToMarkdown(mdTree);
     this.lastMd = md;
@@ -89,8 +89,9 @@ export class SyncEngine {
   }
 
   private rebuildMindmapFromTree(tree: MdTreeNode): void {
-    const nodes = this.store.document.nodes;
-    const edges = this.store.document.edges;
+    const doc = this.store.getDocument();
+    const nodes = doc.nodes;
+    const edges = doc.edges;
 
     const existingMindmapNodes = Object.values(nodes).filter((n) => n.type === 'mindmap');
     const existingEdgesList = Object.values(edges).filter((e) => e.type === 'mindmap');
@@ -130,7 +131,6 @@ export class SyncEngine {
       return id;
     };
 
-    const rootText = tree.text === 'Root' && tree.children.length > 0 ? tree.children[0].text : tree.text;
     const treeToProcess = tree.text === 'Root' && tree.children.length > 0 ? tree.children[0] : tree;
     buildNodes(treeToProcess);
 

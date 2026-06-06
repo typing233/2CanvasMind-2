@@ -75,7 +75,7 @@ export default function App() {
         </div>
       </div>
       <div className="flex flex-1 overflow-hidden">
-        <CanvasContainer viewport={viewport} plugins={pluginManager} />
+        <CanvasContainer viewport={viewport} plugins={pluginManager} commandHistory={commandHistory} />
         <MarkdownPanel syncEngine={syncEngine} />
       </div>
     </div>

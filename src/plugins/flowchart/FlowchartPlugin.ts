@@ -44,7 +44,7 @@ export class FlowchartPlugin implements IPlugin {
   onCanvasMouseDown(point: Point): boolean {
     if (!this.isConnecting) return false;
 
-    const nodes = Object.values(this.ctx.store.document.nodes);
+    const nodes = Object.values(this.ctx.store.getDocument().nodes);
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
       if (!node.type.startsWith('flowchart')) continue;
@@ -65,7 +65,7 @@ export class FlowchartPlugin implements IPlugin {
 
   onKeyDown(e: KeyboardEvent): boolean {
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (this.ctx.store.selectedNodeIds.size > 0 || this.ctx.store.selectedEdgeIds.size > 0) {
+      if (this.ctx.store.getSelectedNodeIds().size > 0) {
         this.deleteSelected();
         return true;
       }
@@ -121,7 +121,7 @@ export class FlowchartPlugin implements IPlugin {
     const target = nodes[edge.targetId];
     if (!source || !target) return;
 
-    const points = edge.waypoints || this.computeOrthogonalRoute(source, target);
+    const points = this.computeOrthogonalRoute(source, target);
 
     ctx.save();
     ctx.strokeStyle = edge.style.stroke;
@@ -215,14 +215,14 @@ export class FlowchartPlugin implements IPlugin {
   }
 
   private deleteSelected(): void {
-    const nodeIds = Array.from(this.ctx.store.selectedNodeIds);
-    const edgeIds = Array.from(this.ctx.store.selectedEdgeIds);
-    if (nodeIds.length === 0 && edgeIds.length === 0) return;
+    const nodeIds = Array.from(this.ctx.store.getSelectedNodeIds());
+    const doc = this.ctx.store.getDocument();
+    if (nodeIds.length === 0) return;
 
-    const removedNodes = nodeIds.map((id) => ({ ...this.ctx.store.document.nodes[id] })).filter(Boolean);
-    const relatedEdges = Object.values(this.ctx.store.document.edges)
+    const removedNodes = nodeIds.map((id) => ({ ...doc.nodes[id] })).filter(Boolean);
+    const relatedEdges = Object.values(doc.edges)
       .filter((e) => nodeIds.includes(e.sourceId) || nodeIds.includes(e.targetId));
-    const removedEdges = [...edgeIds.map((id) => ({ ...this.ctx.store.document.edges[id] })), ...relatedEdges];
+    const removedEdges = [...relatedEdges];
 
     const cmd: ICommand = {
       id: genId(),

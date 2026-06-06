@@ -2,15 +2,17 @@ import { useEffect, useRef } from 'react';
 import { useCanvasStore } from '../core/data-model/store';
 import { ViewportManager } from '../core/viewport/ViewportManager';
 import { PluginManager } from '../core/plugin-system/PluginManager';
+import { CommandHistory } from '../core/commands/CommandHistory';
 import { CanvasEngine } from '../engine/CanvasEngine';
 import { FreehandPlugin } from '../plugins/freehand/FreehandPlugin';
 
 interface Props {
   viewport: ViewportManager;
   plugins: PluginManager;
+  commandHistory: CommandHistory;
 }
 
-export function CanvasContainer({ viewport, plugins }: Props) {
+export function CanvasContainer({ viewport, plugins, commandHistory }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
 
@@ -18,7 +20,7 @@ export function CanvasContainer({ viewport, plugins }: Props) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const engine = new CanvasEngine(canvas, viewport, plugins);
+    const engine = new CanvasEngine(canvas, viewport, plugins, commandHistory);
     engineRef.current = engine;
 
     const handleResize = () => {
@@ -69,7 +71,7 @@ export function CanvasContainer({ viewport, plugins }: Props) {
       unsub();
       cancelAnimationFrame(liveFrame);
     };
-  }, [viewport, plugins]);
+  }, [viewport, plugins, commandHistory]);
 
   return (
     <div className="flex-1 relative overflow-hidden bg-gray-50">

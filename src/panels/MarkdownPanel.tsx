@@ -25,6 +25,17 @@ export function MarkdownPanel({ syncEngine }: Props) {
         const md = update.state.doc.toString();
         syncEngine.onMarkdownChanged(md);
       }
+      if (update.selectionSet && !isUpdatingRef.current && syncEngine) {
+        const pos = update.state.selection.main.head;
+        const lineNum = update.state.doc.lineAt(pos).number - 1;
+        const nodeId = syncEngine.getNodeIdForLine(lineNum);
+        if (nodeId) {
+          const current = useCanvasStore.getState().getSelectedNodeIds();
+          if (!current.has(nodeId)) {
+            useCanvasStore.getState().setSelection([nodeId]);
+          }
+        }
+      }
     });
 
     const state = EditorState.create({
@@ -50,8 +61,10 @@ export function MarkdownPanel({ syncEngine }: Props) {
     if (selectedNodeIds.size === 0) return;
 
     const nodeId = Array.from(selectedNodeIds)[0];
+    // Rebuild sync map from current canvas state
+    syncEngine.getMarkdownFromCanvas();
     const line = syncEngine.getLineForNodeId(nodeId);
-    if (line !== null) {
+    if (line !== null && line < viewRef.current.state.doc.lines) {
       const view = viewRef.current;
       const docLine = view.state.doc.line(line + 1);
       view.dispatch({

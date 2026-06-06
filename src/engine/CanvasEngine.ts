@@ -1,5 +1,6 @@
 import { ViewportManager } from '../core/viewport/ViewportManager';
 import { PluginManager } from '../core/plugin-system/PluginManager';
+import { CommandHistory } from '../core/commands/CommandHistory';
 import { useCanvasStore } from '../core/data-model/store';
 import { Renderer } from './Renderer';
 import { HitTester } from './HitTester';
@@ -20,6 +21,7 @@ export class CanvasEngine {
     canvas: HTMLCanvasElement,
     viewport: ViewportManager,
     plugins: PluginManager,
+    commandHistory: CommandHistory,
   ) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
@@ -30,7 +32,7 @@ export class CanvasEngine {
 
     const store = useCanvasStore.getState();
     this.inputHandler = new InputHandler(
-      canvas, viewport, plugins, store, this.hitTester,
+      canvas, viewport, plugins, store, commandHistory, this.hitTester,
       () => this.requestRender(),
     );
   }

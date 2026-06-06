@@ -29,7 +29,7 @@ export class MindMapPlugin implements IPlugin {
   }
 
   onCanvasDblClick(point: Point): void {
-    const nodes = this.ctx.store.document.nodes;
+    const nodes = this.ctx.store.getDocument().nodes;
     const hasRoot = Object.values(nodes).some((n) => n.type === 'mindmap' && !n.parentId);
     if (!hasRoot) {
       this.createRoot(point);
@@ -48,7 +48,7 @@ export class MindMapPlugin implements IPlugin {
       return true;
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (this.ctx.store.selectedNodeIds.size > 0) {
+      if (this.ctx.store.getSelectedNodeIds().size > 0) {
         this.deleteSelected();
         return true;
       }
@@ -134,7 +134,7 @@ export class MindMapPlugin implements IPlugin {
   }
 
   addChildToSelected(): void {
-    const selectedIds = Array.from(this.ctx.store.selectedNodeIds);
+    const selectedIds = Array.from(this.ctx.store.getSelectedNodeIds());
     if (selectedIds.length === 0) return;
 
     const parentId = selectedIds[0];
@@ -193,7 +193,7 @@ export class MindMapPlugin implements IPlugin {
   }
 
   addSibling(): void {
-    const selectedIds = Array.from(this.ctx.store.selectedNodeIds);
+    const selectedIds = Array.from(this.ctx.store.getSelectedNodeIds());
     if (selectedIds.length === 0) return;
 
     const selected = this.ctx.store.getNode(selectedIds[0]);
@@ -252,7 +252,7 @@ export class MindMapPlugin implements IPlugin {
   }
 
   deleteSelected(): void {
-    const selectedIds = Array.from(this.ctx.store.selectedNodeIds);
+    const selectedIds = Array.from(this.ctx.store.getSelectedNodeIds());
     if (selectedIds.length === 0) return;
 
     const nodeId = selectedIds[0];
@@ -272,7 +272,7 @@ export class MindMapPlugin implements IPlugin {
     };
     collect(nodeId);
 
-    const edges = this.ctx.store.document.edges;
+    const edges = this.ctx.store.getDocument().edges;
     for (const edge of Object.values(edges)) {
       if (removedNodes.some((n) => n.id === edge.sourceId || n.id === edge.targetId)) {
         removedEdges.push({ ...edge });
@@ -318,20 +318,24 @@ export class MindMapPlugin implements IPlugin {
   }
 
   relayout(): void {
-    const nodes = this.ctx.store.document.nodes;
+    const nodes = this.ctx.store.getDocument().nodes;
     const root = Object.values(nodes).find((n) => n.type === 'mindmap' && !n.parentId);
     if (!root) return;
 
     this.rootId = root.id;
-    const positions = layoutTree(root.id, nodes, root.position);
+    const origin = (root.position.x === 0 && root.position.y === 0)
+      ? { x: 100, y: 300 }
+      : root.position;
+    const positions = layoutTree(root.id, nodes, origin);
     for (const [id, pos] of positions) {
       this.ctx.store.updateNode(id, { position: pos });
     }
+    this.ctx.requestRender();
   }
 
   getRootId(): string | null {
     if (this.rootId) return this.rootId;
-    const nodes = this.ctx.store.document.nodes;
+    const nodes = this.ctx.store.getDocument().nodes;
     const root = Object.values(nodes).find((n) => n.type === 'mindmap' && !n.parentId);
     return root?.id || null;
   }

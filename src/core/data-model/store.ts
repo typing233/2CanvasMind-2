@@ -8,6 +8,9 @@ export interface CanvasStore {
   selectedEdgeIds: Set<EdgeId>;
   activePluginId: string | null;
 
+  getDocument(): CanvasDocument;
+  getSelectedNodeIds(): Set<NodeId>;
+
   addNode(node: CanvasNode): void;
   updateNode(id: NodeId, patch: Partial<CanvasNode>): void;
   removeNode(id: NodeId): void;
@@ -36,6 +39,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   selectedNodeIds: new Set(),
   selectedEdgeIds: new Set(),
   activePluginId: null,
+
+  getDocument() {
+    return get().document;
+  },
+
+  getSelectedNodeIds() {
+    return get().selectedNodeIds;
+  },
 
   addNode(node) {
     set((s) => ({

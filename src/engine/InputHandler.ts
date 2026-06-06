@@ -2,13 +2,17 @@ import { Point } from '../core/data-model/types';
 import { ViewportManager } from '../core/viewport/ViewportManager';
 import { PluginManager } from '../core/plugin-system/PluginManager';
 import { useCanvasStore, CanvasStore } from '../core/data-model/store';
+import { CommandHistory } from '../core/commands/CommandHistory';
+import { ICommand } from '../core/commands/Command';
 import { HitTester } from './HitTester';
+import { genId } from '../utils/id';
 
 export class InputHandler {
   private canvas: HTMLCanvasElement;
   private viewport: ViewportManager;
   private plugins: PluginManager;
   private store: CanvasStore;
+  private commandHistory: CommandHistory;
   private hitTester: HitTester;
   private requestRender: () => void;
 
@@ -16,6 +20,7 @@ export class InputHandler {
   private isDragging = false;
   private lastMouse: Point = { x: 0, y: 0 };
   private dragStartCanvas: Point = { x: 0, y: 0 };
+  private dragStartPositions: Map<string, Point> = new Map();
   private spaceHeld = false;
 
   constructor(
@@ -23,6 +28,7 @@ export class InputHandler {
     viewport: ViewportManager,
     plugins: PluginManager,
     store: CanvasStore,
+    commandHistory: CommandHistory,
     hitTester: HitTester,
     requestRender: () => void,
   ) {
@@ -30,6 +36,7 @@ export class InputHandler {
     this.viewport = viewport;
     this.plugins = plugins;
     this.store = store;
+    this.commandHistory = commandHistory;
     this.hitTester = hitTester;
     this.requestRender = requestRender;
     this.bind();
@@ -76,12 +83,17 @@ export class InputHandler {
         state.setSelection([nodes[i].id]);
         this.isDragging = true;
         this.dragStartCanvas = canvasPt;
+        this.dragStartPositions.clear();
+        for (const nodeId of useCanvasStore.getState().selectedNodeIds) {
+          const n = useCanvasStore.getState().getNode(nodeId);
+          if (n) this.dragStartPositions.set(nodeId, { ...n.position });
+        }
         this.requestRender();
         return;
       }
     }
 
-    this.store.setSelection([]);
+    state.setSelection([]);
     this.requestRender();
   };
 
@@ -131,12 +143,61 @@ export class InputHandler {
 
     if (this.isDragging) {
       this.isDragging = false;
+      this.commitMoveCommand();
       return;
     }
 
     const plugin = this.plugins.getActive();
     plugin?.onCanvasMouseUp?.(canvasPt, e);
   };
+
+  private commitMoveCommand(): void {
+    if (this.dragStartPositions.size === 0) return;
+
+    const state = useCanvasStore.getState();
+    const endPositions = new Map<string, Point>();
+    let hasMoved = false;
+
+    for (const [nodeId, startPos] of this.dragStartPositions) {
+      const node = state.getNode(nodeId);
+      if (node) {
+        endPositions.set(nodeId, { ...node.position });
+        if (node.position.x !== startPos.x || node.position.y !== startPos.y) {
+          hasMoved = true;
+        }
+      }
+    }
+
+    if (!hasMoved) {
+      this.dragStartPositions.clear();
+      return;
+    }
+
+    const startSnap = new Map(this.dragStartPositions);
+    const endSnap = new Map(endPositions);
+
+    const cmd: ICommand = {
+      id: genId(),
+      description: 'Move nodes',
+      execute: () => {
+        const s = useCanvasStore.getState();
+        for (const [nodeId, pos] of endSnap) {
+          s.updateNode(nodeId, { position: pos });
+        }
+        this.requestRender();
+      },
+      undo: () => {
+        const s = useCanvasStore.getState();
+        for (const [nodeId, pos] of startSnap) {
+          s.updateNode(nodeId, { position: pos });
+        }
+        this.requestRender();
+      },
+    };
+
+    this.commandHistory.pushWithoutExecute(cmd);
+    this.dragStartPositions.clear();
+  }
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();

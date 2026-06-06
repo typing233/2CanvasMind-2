@@ -20,6 +20,15 @@ export class CommandHistory {
     this.onChange?.();
   }
 
+  pushWithoutExecute(cmd: ICommand): void {
+    this.undoStack.push(cmd);
+    if (this.undoStack.length > this.maxSize) {
+      this.undoStack.shift();
+    }
+    this.redoStack = [];
+    this.onChange?.();
+  }
+
   undo(): void {
     const cmd = this.undoStack.pop();
     if (cmd) {
