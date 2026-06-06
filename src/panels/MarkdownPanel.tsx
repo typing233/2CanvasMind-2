@@ -4,6 +4,7 @@ import { EditorState } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { SyncEngine } from '../sync/SyncEngine';
 import { useCanvasStore } from '../core/data-model/store';
+import { t } from '../i18n';
 
 interface Props {
   syncEngine: SyncEngine | null;
@@ -89,20 +90,35 @@ export function MarkdownPanel({ syncEngine }: Props) {
     if (!syncEngine || !viewRef.current) return;
     isUpdatingRef.current = true;
 
-    const allNodes = useCanvasStore.getState().getDocument().nodes;
-    const mindmapRoot = Object.values(allNodes).find((n) => n.type === 'mindmap' && !n.parentId);
-    if (!mindmapRoot) {
+    const md = syncEngine.generateMarkdownFromCanvas();
+    if (!md) {
       isUpdatingRef.current = false;
       return;
     }
 
-    const md = serializeCanvasToMd(mindmapRoot.id, allNodes);
     const view = viewRef.current;
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: md },
     });
 
     syncEngine.rebuildSyncMap(md);
+    isUpdatingRef.current = false;
+  };
+
+  const handleSyncFromFlow = () => {
+    if (!syncEngine || !viewRef.current) return;
+    isUpdatingRef.current = true;
+
+    const md = syncEngine.generateFlowchartMarkdown();
+    if (!md) {
+      isUpdatingRef.current = false;
+      return;
+    }
+
+    const view = viewRef.current;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: md },
+    });
     isUpdatingRef.current = false;
   };
 
@@ -149,14 +165,23 @@ export function MarkdownPanel({ syncEngine }: Props) {
             <button
               onClick={handleSyncToMap}
               className="px-2 py-0.5 text-xs rounded bg-blue-50 text-blue-700 hover:bg-blue-100"
+              title={t('sync.to_map')}
             >
               → Map
             </button>
             <button
               onClick={handleSyncFromMap}
               className="px-2 py-0.5 text-xs rounded bg-green-50 text-green-700 hover:bg-green-100"
+              title={t('sync.from_map')}
             >
               ← Map
+            </button>
+            <button
+              onClick={handleSyncFromFlow}
+              className="px-2 py-0.5 text-xs rounded bg-purple-50 text-purple-700 hover:bg-purple-100"
+              title={t('sync.from_flow')}
+            >
+              ← Flow
             </button>
             <button
               onClick={() => setIsOpen(false)}
@@ -170,26 +195,4 @@ export function MarkdownPanel({ syncEngine }: Props) {
       </div>
     </div>
   );
-}
-
-function serializeCanvasToMd(rootId: string, nodes: Record<string, any>): string {
-  const lines: string[] = [];
-  function walk(id: string, depth: number): void {
-    const node = nodes[id];
-    if (!node) return;
-    const text = (node.data?.text as string) || '';
-    if (depth <= 6) {
-      lines.push(`${'#'.repeat(depth)} ${text}`);
-    } else {
-      const indent = '  '.repeat(depth - 7);
-      lines.push(`${indent}- ${text}`);
-    }
-    if (node.children) {
-      for (const childId of node.children) {
-        walk(childId, depth + 1);
-      }
-    }
-  }
-  walk(rootId, 1);
-  return lines.join('\n');
 }

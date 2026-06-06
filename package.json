@@ -1,13 +1,21 @@
 {
   "name": "canvasmind",
-  "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
+  "description": "An open-source whiteboard tool combining mind maps, flowcharts, and freehand drawing with a plugin ecosystem",
   "type": "module",
+  "license": "MIT",
+  "keywords": ["mind-map", "flowchart", "whiteboard", "canvas", "react", "plugin", "diagram"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/canvasmind/canvasmind"
+  },
+  "homepage": "https://github.com/canvasmind/canvasmind#readme",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

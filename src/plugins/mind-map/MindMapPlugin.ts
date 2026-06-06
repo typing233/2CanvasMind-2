@@ -1,13 +1,24 @@
-import { IPlugin, PluginContext, ToolbarContribution } from '../../core/plugin-system/types';
+import { IPluginV2, PluginContext, ToolbarContribution, PluginManifest } from '../../core/plugin-system/types';
 import { CanvasNode, CanvasEdge, Point, DEFAULT_NODE_STYLE, DEFAULT_EDGE_STYLE } from '../../core/data-model/types';
 import { ICommand } from '../../core/commands/Command';
 import { genId } from '../../utils/id';
 import { layoutTree } from './tree-layout';
 
-export class MindMapPlugin implements IPlugin {
+export class MindMapPlugin implements IPluginV2 {
   id = 'mindmap';
   name = 'Mind Map';
-  version = '1.0.0';
+  version = '2.0.0';
+
+  manifest: PluginManifest = {
+    id: 'mindmap',
+    name: 'Mind Map',
+    version: '2.0.0',
+    description: 'Create hierarchical mind maps with auto-layout',
+    author: 'CanvasMind',
+    category: 'shape',
+    isBuiltIn: true,
+    activatable: true,
+  };
 
   private ctx!: PluginContext;
   private rootId: string | null = null;
@@ -72,7 +83,7 @@ export class MindMapPlugin implements IPlugin {
     const text = (node.data.text as string) || '';
     if (text) {
       ctx.fillStyle = style.fontColor;
-      ctx.font = `${node.parentId ? style.fontSize : style.fontSize + 2}px sans-serif`;
+      ctx.font = `${node.parentId ? style.fontSize : style.fontSize + 2}px ${style.fontFamily || 'sans-serif'}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, position.x + size.width / 2, position.y + size.height / 2, size.width - 16);
@@ -310,6 +321,86 @@ export class MindMapPlugin implements IPlugin {
             });
           }
         }
+        this.relayout();
+        this.ctx.requestRender();
+      },
+    };
+    this.ctx.commandHistory.execute(cmd);
+  }
+
+  ownsNodeType(type: string): boolean {
+    return type === 'mindmap';
+  }
+
+  ownsEdgeType(type: string): boolean {
+    return type === 'mindmap';
+  }
+
+  onDropOnNode(draggedIds: string[], targetId: string, position: 'before' | 'after' | 'child'): void {
+    if (draggedIds.length === 0) return;
+    const draggedId = draggedIds[0];
+    const dragged = this.ctx.store.getNode(draggedId);
+    const target = this.ctx.store.getNode(targetId);
+    if (!dragged || !target || dragged.type !== 'mindmap' || target.type !== 'mindmap') return;
+
+    const oldParentId = dragged.parentId;
+    const newParentId = position === 'child' ? targetId : target.parentId;
+    if (!newParentId || newParentId === draggedId) return;
+
+    const oldEdge = Object.values(this.ctx.store.getDocument().edges)
+      .find(e => e.type === 'mindmap' && e.targetId === draggedId);
+
+    const newEdgeId = genId();
+
+    const cmd: ICommand = {
+      id: genId(),
+      description: 'Reparent mind map node',
+      execute: () => {
+        if (oldParentId) {
+          const oldP = this.ctx.store.getNode(oldParentId);
+          if (oldP) {
+            this.ctx.store.updateNode(oldParentId, {
+              children: (oldP.children || []).filter(c => c !== draggedId),
+            });
+          }
+        }
+        if (oldEdge) this.ctx.store.removeEdge(oldEdge.id);
+
+        this.ctx.store.updateNode(draggedId, { parentId: newParentId });
+        const newP = this.ctx.store.getNode(newParentId);
+        if (newP) {
+          this.ctx.store.updateNode(newParentId, {
+            children: [...(newP.children || []), draggedId],
+          });
+        }
+        this.ctx.store.addEdge({
+          id: newEdgeId,
+          type: 'mindmap',
+          sourceId: newParentId,
+          targetId: draggedId,
+          style: { ...DEFAULT_EDGE_STYLE, arrowEnd: false },
+        });
+        this.relayout();
+        this.ctx.requestRender();
+      },
+      undo: () => {
+        this.ctx.store.removeEdge(newEdgeId);
+        const newP = this.ctx.store.getNode(newParentId);
+        if (newP) {
+          this.ctx.store.updateNode(newParentId, {
+            children: (newP.children || []).filter(c => c !== draggedId),
+          });
+        }
+        this.ctx.store.updateNode(draggedId, { parentId: oldParentId });
+        if (oldParentId) {
+          const oldP = this.ctx.store.getNode(oldParentId);
+          if (oldP) {
+            this.ctx.store.updateNode(oldParentId, {
+              children: [...(oldP.children || []), draggedId],
+            });
+          }
+        }
+        if (oldEdge) this.ctx.store.addEdge(oldEdge);
         this.relayout();
         this.ctx.requestRender();
       },

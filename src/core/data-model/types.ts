@@ -16,8 +16,10 @@ export interface NodeStyle {
   stroke: string;
   strokeWidth: number;
   fontSize: number;
+  fontFamily: string;
   fontColor: string;
   borderRadius: number;
+  opacity?: number;
 }
 
 export interface EdgeStyle {
@@ -26,6 +28,7 @@ export interface EdgeStyle {
   dash?: number[];
   arrowStart: boolean;
   arrowEnd: boolean;
+  routeType?: 'straight' | 'bezier' | 'elbow';
 }
 
 export interface CanvasNode {
@@ -69,6 +72,7 @@ export const DEFAULT_NODE_STYLE: NodeStyle = {
   stroke: '#374151',
   strokeWidth: 2,
   fontSize: 14,
+  fontFamily: 'sans-serif',
   fontColor: '#1f2937',
   borderRadius: 6,
 };

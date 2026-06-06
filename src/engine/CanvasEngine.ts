@@ -2,6 +2,8 @@ import { ViewportManager } from '../core/viewport/ViewportManager';
 import { PluginManager } from '../core/plugin-system/PluginManager';
 import { CommandHistory } from '../core/commands/CommandHistory';
 import { useCanvasStore } from '../core/data-model/store';
+import { SpatialIndex, AABB } from '../core/spatial/SpatialIndex';
+import { CanvasNode } from '../core/data-model/types';
 import { Renderer } from './Renderer';
 import { HitTester } from './HitTester';
 import { InputHandler } from './InputHandler';
@@ -14,6 +16,7 @@ export class CanvasEngine {
   private inputHandler: InputHandler;
   private viewport: ViewportManager;
   private plugins: PluginManager;
+  private spatialIndex: SpatialIndex;
   private animFrameId: number | null = null;
   private dirty = true;
 
@@ -27,6 +30,7 @@ export class CanvasEngine {
     this.ctx = canvas.getContext('2d')!;
     this.viewport = viewport;
     this.plugins = plugins;
+    this.spatialIndex = new SpatialIndex(200);
     this.renderer = new Renderer(this.ctx);
     this.hitTester = new HitTester();
 
@@ -38,6 +42,7 @@ export class CanvasEngine {
   }
 
   start(): void {
+    this.rebuildSpatialIndex();
     this.loop();
   }
 
@@ -61,6 +66,10 @@ export class CanvasEngine {
     this.canvas.style.height = `${height}px`;
     this.ctx.scale(dpr, dpr);
     this.requestRender();
+  }
+
+  getSpatialIndex(): SpatialIndex {
+    return this.spatialIndex;
   }
 
   private loop = (): void => {
@@ -89,8 +98,21 @@ export class CanvasEngine {
     const { nodes, edges } = state.document;
     const selectedNodeIds = state.selectedNodeIds;
 
+    this.updateSpatialIndex(nodes);
+
+    const visibleBounds = this.getVisibleBounds(vp, width, height);
+    const visibleNodeIds = this.spatialIndex.query(visibleBounds);
+
+    const visibleEdgeSet = new Set<string>();
     for (const edge of Object.values(edges)) {
-      const plugin = this.plugins.get(edge.type.split('-')[0]);
+      if (visibleNodeIds.has(edge.sourceId) || visibleNodeIds.has(edge.targetId)) {
+        visibleEdgeSet.add(edge.id);
+      }
+    }
+
+    for (const edge of Object.values(edges)) {
+      if (!visibleEdgeSet.has(edge.id)) continue;
+      const plugin = this.plugins.getPluginForEdgeType(edge.type);
       if (plugin?.renderEdge) {
         plugin.renderEdge(ctx, edge, nodes);
       } else {
@@ -98,9 +120,11 @@ export class CanvasEngine {
       }
     }
 
-    for (const node of Object.values(nodes)) {
+    for (const nodeId of visibleNodeIds) {
+      const node = nodes[nodeId];
+      if (!node) continue;
       const isSelected = selectedNodeIds.has(node.id);
-      const plugin = this.plugins.get(node.type.split('-')[0]);
+      const plugin = this.plugins.getPluginForNodeType(node.type);
       if (plugin?.renderNode) {
         plugin.renderNode(ctx, node, isSelected);
       } else if (node.type === 'flowchart-diamond') {
@@ -113,5 +137,43 @@ export class CanvasEngine {
     }
 
     ctx.restore();
+  }
+
+  private getVisibleBounds(vp: { x: number; y: number; zoom: number }, width: number, height: number): AABB {
+    return {
+      minX: -vp.x / vp.zoom,
+      minY: -vp.y / vp.zoom,
+      maxX: (-vp.x + width) / vp.zoom,
+      maxY: (-vp.y + height) / vp.zoom,
+    };
+  }
+
+  private updateSpatialIndex(nodes: Record<string, CanvasNode>): void {
+    for (const node of Object.values(nodes)) {
+      const bounds: AABB = {
+        minX: node.position.x,
+        minY: node.position.y,
+        maxX: node.position.x + node.size.width,
+        maxY: node.position.y + node.size.height,
+      };
+      const existing = this.spatialIndex.getBounds(node.id);
+      if (!existing || existing.minX !== bounds.minX || existing.minY !== bounds.minY
+        || existing.maxX !== bounds.maxX || existing.maxY !== bounds.maxY) {
+        this.spatialIndex.update(node.id, bounds);
+      }
+    }
+  }
+
+  private rebuildSpatialIndex(): void {
+    this.spatialIndex.clear();
+    const nodes = useCanvasStore.getState().document.nodes;
+    for (const node of Object.values(nodes)) {
+      this.spatialIndex.insert(node.id, {
+        minX: node.position.x,
+        minY: node.position.y,
+        maxX: node.position.x + node.size.width,
+        maxY: node.position.y + node.size.height,
+      });
+    }
   }
 }

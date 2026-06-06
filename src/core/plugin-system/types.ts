@@ -19,6 +19,25 @@ export interface ToolbarContribution {
   group?: string;
 }
 
+export interface ContextMenuContribution {
+  id: string;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  icon?: string;
+  category: 'shape' | 'tool' | 'export' | 'utility';
+  isBuiltIn: boolean;
+  activatable: boolean;
+}
+
 export interface IPlugin {
   id: string;
   name: string;
@@ -41,4 +60,16 @@ export interface IPlugin {
   onCanvasMouseUp?(point: Point, e: MouseEvent): void;
   onCanvasDblClick?(point: Point, e: MouseEvent): void;
   onKeyDown?(e: KeyboardEvent): boolean;
+}
+
+export interface IPluginV2 extends IPlugin {
+  manifest?: PluginManifest;
+
+  ownsNodeType?(type: string): boolean;
+  ownsEdgeType?(type: string): boolean;
+
+  canAcceptDrop?(draggedNodes: CanvasNode[], targetNode: CanvasNode): boolean;
+  onDropOnNode?(draggedIds: string[], targetId: string, position: 'before' | 'after' | 'child'): void;
+
+  contributeContextMenu?(selectedNodes: CanvasNode[]): ContextMenuContribution[];
 }

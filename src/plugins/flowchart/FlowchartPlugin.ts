@@ -1,14 +1,25 @@
-import { IPlugin, PluginContext, ToolbarContribution } from '../../core/plugin-system/types';
+import { IPluginV2, PluginContext, ToolbarContribution, PluginManifest } from '../../core/plugin-system/types';
 import { CanvasNode, CanvasEdge, Point, DEFAULT_NODE_STYLE, DEFAULT_EDGE_STYLE } from '../../core/data-model/types';
 import { ICommand } from '../../core/commands/Command';
 import { genId } from '../../utils/id';
 
 type ShapeType = 'flowchart-rect' | 'flowchart-diamond' | 'flowchart-rounded';
 
-export class FlowchartPlugin implements IPlugin {
+export class FlowchartPlugin implements IPluginV2 {
   id = 'flowchart';
   name = 'Flowchart';
-  version = '1.0.0';
+  version = '2.0.0';
+
+  manifest: PluginManifest = {
+    id: 'flowchart',
+    name: 'Flowchart',
+    version: '2.0.0',
+    description: 'Create flowcharts with shapes and connections',
+    author: 'CanvasMind',
+    category: 'shape',
+    isBuiltIn: true,
+    activatable: true,
+  };
 
   private ctx!: PluginContext;
   private currentShape: ShapeType = 'flowchart-rect';
@@ -107,7 +118,7 @@ export class FlowchartPlugin implements IPlugin {
     const text = (node.data.text as string) || '';
     if (text) {
       ctx.fillStyle = style.fontColor;
-      ctx.font = `${style.fontSize}px sans-serif`;
+      ctx.font = `${style.fontSize}px ${style.fontFamily || 'sans-serif'}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, position.x + size.width / 2, position.y + size.height / 2, size.width - 16);

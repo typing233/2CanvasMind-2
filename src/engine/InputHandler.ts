@@ -5,6 +5,8 @@ import { useCanvasStore, CanvasStore } from '../core/data-model/store';
 import { CommandHistory } from '../core/commands/CommandHistory';
 import { ICommand } from '../core/commands/Command';
 import { HitTester } from './HitTester';
+import { DragDropManager } from './DragDropManager';
+import { IPluginV2 } from '../core/plugin-system/types';
 import { genId } from '../utils/id';
 
 export class InputHandler {
@@ -14,6 +16,7 @@ export class InputHandler {
   private store: CanvasStore;
   private commandHistory: CommandHistory;
   private hitTester: HitTester;
+  private dragDropManager: DragDropManager;
   private requestRender: () => void;
 
   private isPanning = false;
@@ -22,6 +25,7 @@ export class InputHandler {
   private dragStartCanvas: Point = { x: 0, y: 0 };
   private dragStartPositions: Map<string, Point> = new Map();
   private spaceHeld = false;
+  private dragDistance = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -38,6 +42,7 @@ export class InputHandler {
     this.store = store;
     this.commandHistory = commandHistory;
     this.hitTester = hitTester;
+    this.dragDropManager = new DragDropManager(store);
     this.requestRender = requestRender;
     this.bind();
   }
@@ -62,6 +67,10 @@ export class InputHandler {
     window.removeEventListener('keyup', this.onKeyUp);
   }
 
+  getDragDropManager(): DragDropManager {
+    return this.dragDropManager;
+  }
+
   private onMouseDown = (e: MouseEvent): void => {
     const screenPt = this.getMousePos(e);
     const canvasPt = this.viewport.screenToCanvas(screenPt);
@@ -82,6 +91,7 @@ export class InputHandler {
       if (this.hitTester.hitTestNode(nodes[i], canvasPt)) {
         state.setSelection([nodes[i].id]);
         this.isDragging = true;
+        this.dragDistance = 0;
         this.dragStartCanvas = canvasPt;
         this.dragStartPositions.clear();
         for (const nodeId of useCanvasStore.getState().selectedNodeIds) {
@@ -114,6 +124,8 @@ export class InputHandler {
       const dx = canvasPt.x - this.dragStartCanvas.x;
       const dy = canvasPt.y - this.dragStartCanvas.y;
       this.dragStartCanvas = canvasPt;
+      this.dragDistance += Math.abs(dx) + Math.abs(dy);
+
       const state = useCanvasStore.getState();
       for (const nodeId of state.selectedNodeIds) {
         const node = state.getNode(nodeId);
@@ -123,6 +135,14 @@ export class InputHandler {
           });
         }
       }
+
+      if (this.dragDistance > 20) {
+        if (!this.dragDropManager.isActive()) {
+          this.dragDropManager.startDrag(state.selectedNodeIds);
+        }
+        this.dragDropManager.updateDropTarget(canvasPt, state.document.nodes);
+      }
+
       this.requestRender();
       return;
     }
@@ -143,6 +163,15 @@ export class InputHandler {
 
     if (this.isDragging) {
       this.isDragging = false;
+
+      if (this.dragDropManager.isActive()) {
+        const dropTarget = this.dragDropManager.endDrag();
+        if (dropTarget) {
+          this.handleDrop(dropTarget.nodeId, dropTarget.position);
+          return;
+        }
+      }
+
       this.commitMoveCommand();
       return;
     }
@@ -150,6 +179,22 @@ export class InputHandler {
     const plugin = this.plugins.getActive();
     plugin?.onCanvasMouseUp?.(canvasPt, e);
   };
+
+  private handleDrop(targetId: string, position: 'before' | 'after' | 'child'): void {
+    const state = useCanvasStore.getState();
+    const draggedIds = Array.from(state.selectedNodeIds);
+    if (draggedIds.length === 0) return;
+
+    const targetNode = state.getNode(targetId);
+    if (!targetNode) return;
+
+    const plugin = this.plugins.getPluginForNodeType(targetNode.type) as IPluginV2 | undefined;
+    if (plugin?.onDropOnNode) {
+      plugin.onDropOnNode(draggedIds, targetId, position);
+    } else {
+      this.commitMoveCommand();
+    }
+  }
 
   private commitMoveCommand(): void {
     if (this.dragStartPositions.size === 0) return;

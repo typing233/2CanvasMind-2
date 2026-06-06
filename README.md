@@ -1,73 +1,81 @@
-# React + TypeScript + Vite
+# CanvasMind
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An open-source whiteboard tool combining mind maps, flowcharts, and freehand drawing with a plugin ecosystem.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+**Core Drawing Modes**
+- Mind Map: hierarchical tree with auto-layout, keyboard shortcuts (Tab/Enter/Delete)
+- Flowchart: rectangle/diamond/rounded shapes with orthogonal connection routing
+- Freehand Drawing: pen tool with path simplification and adjustable stroke
 
-## React Compiler
+**V2.0 Highlights**
+- Style Editing Panel: complete color, font, stroke, and opacity editing for all node types
+- Drag-and-Drop Reorganization: reparent mind map nodes by dragging onto other nodes
+- Cross-Mode Conversion: right-click to convert flowchart nodes to mind map nodes and vice versa
+- Plugin Marketplace: enable/disable plugins through a built-in marketplace UI
+- 5 Built-in Plugins: Sticky Notes, Image Insert, Connector Lines, Geometry Shapes, Export PNG/SVG
+- Bidirectional Markdown Sync: real-time sync (150ms) between markdown editor and mind map; flowchart-to-markdown export
+- Performance: spatial indexing with virtual rendering (only visible nodes rendered)
+- i18n: Chinese and English language support
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**Always Available**
+- Undo/Redo (Ctrl+Z / Ctrl+Shift+Z)
+- Pan (Space+drag or middle mouse) and Zoom (scroll wheel)
+- Save/Load documents as JSON
+- Resizable markdown editor panel
 
-## Expanding the ESLint configuration
+## Quick Start
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open http://localhost:5173 in your browser.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Build
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+npm run preview
 ```
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | TypeScript 6 |
+| UI | React 19 |
+| State | Zustand 5 |
+| Rendering | HTML5 Canvas 2D (custom engine) |
+| Editor | CodeMirror 6 |
+| Styling | Tailwind CSS 4 |
+| Build | Vite 8 |
+
+## Architecture
+
+```
+src/
+  core/         Data model, plugin system, commands, event bus, spatial index
+  engine/       Canvas engine, renderer, input handler, hit testing, drag-drop
+  plugins/      8 built-in plugins
+  panels/       Style editor, markdown panel, marketplace panel
+  sync/         Markdown <-> canvas sync engine
+  ui/           Toolbar, file actions, context menu
+  i18n/         Internationalization (en/zh)
+```
+
+See [docs/architecture.md](docs/architecture.md) for the full system design.
+
+## Plugin Development
+
+CanvasMind is extensible through the `IPluginV2` interface. See [docs/plugin-development.md](docs/plugin-development.md) for a complete guide.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+
+## License
+
+MIT

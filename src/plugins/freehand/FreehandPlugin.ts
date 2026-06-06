@@ -1,12 +1,23 @@
-import { IPlugin, PluginContext, ToolbarContribution } from '../../core/plugin-system/types';
+import { IPluginV2, PluginContext, ToolbarContribution, PluginManifest } from '../../core/plugin-system/types';
 import { CanvasNode, Point, DEFAULT_NODE_STYLE } from '../../core/data-model/types';
 import { ICommand } from '../../core/commands/Command';
 import { genId } from '../../utils/id';
 
-export class FreehandPlugin implements IPlugin {
+export class FreehandPlugin implements IPluginV2 {
   id = 'freehand';
   name = 'Free Draw';
-  version = '1.0.0';
+  version = '2.0.0';
+
+  manifest: PluginManifest = {
+    id: 'freehand',
+    name: 'Free Draw',
+    version: '2.0.0',
+    description: 'Draw freehand paths on the canvas',
+    author: 'CanvasMind',
+    category: 'tool',
+    isBuiltIn: true,
+    activatable: true,
+  };
 
   private ctx!: PluginContext;
   private isDrawing = false;

@@ -52,7 +52,7 @@ export class Renderer {
     const text = (node.data.text as string) || '';
     if (text) {
       ctx.fillStyle = style.fontColor;
-      ctx.font = `${style.fontSize}px sans-serif`;
+      ctx.font = `${style.fontSize}px ${style.fontFamily || 'sans-serif'}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const cx = position.x + size.width / 2;
@@ -86,7 +86,7 @@ export class Renderer {
     const text = (node.data.text as string) || '';
     if (text) {
       ctx.fillStyle = style.fontColor;
-      ctx.font = `${style.fontSize}px sans-serif`;
+      ctx.font = `${style.fontSize}px ${style.fontFamily || 'sans-serif'}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       this.drawWrappedText(text, cx, cy, hw * 1.2);

@@ -7,10 +7,13 @@ import { MindMapPlugin } from '../plugins/mind-map/MindMapPlugin';
 import { genId } from '../utils/id';
 import {
   parseMarkdownToTree,
+  serializeTreeToMarkdown,
+  mindmapToMdTree,
   MdTreeNode,
   SyncMapEntry,
   buildSyncMapFromEditorContent,
 } from './markdown-serializer';
+import { serializeFlowchartToMarkdown } from './FlowchartSerializer';
 
 export class SyncEngine {
   private store: CanvasStore;
@@ -39,7 +42,7 @@ export class SyncEngine {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.applyMarkdownToCanvas(md);
-    }, 400);
+    }, 150);
   }
 
   applyMarkdownToCanvas(md: string): void {
@@ -47,6 +50,30 @@ export class SyncEngine {
     try {
       const tree = parseMarkdownToTree(md);
       this.rebuildMindmapFromTree(tree, md);
+    } finally {
+      this.updating = null;
+    }
+  }
+
+  generateMarkdownFromCanvas(): string {
+    this.updating = 'canvas';
+    try {
+      const rootId = this.mindmapPlugin.getRootId();
+      if (!rootId) return '';
+      const nodes = this.store.getDocument().nodes;
+      const mdTree = mindmapToMdTree(rootId, nodes);
+      const md = serializeTreeToMarkdown(mdTree);
+      return md;
+    } finally {
+      this.updating = null;
+    }
+  }
+
+  generateFlowchartMarkdown(): string {
+    this.updating = 'canvas';
+    try {
+      const doc = this.store.getDocument();
+      return serializeFlowchartToMarkdown(doc.nodes, doc.edges);
     } finally {
       this.updating = null;
     }
@@ -97,7 +124,7 @@ export class SyncEngine {
         data: { text: mdNode.text },
         parentId,
         children: [],
-        style: { ...DEFAULT_NODE_STYLE, borderRadius: 12, fill: parentId ? '#ffffff' : '#dbeafe' },
+        style: { ...DEFAULT_NODE_STYLE, borderRadius: 12, fill: parentId ? '#ffffff' : '#dbeafe', fontFamily: 'sans-serif' },
         locked: false,
       });
 
