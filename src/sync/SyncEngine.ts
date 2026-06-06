@@ -7,11 +7,9 @@ import { MindMapPlugin } from '../plugins/mind-map/MindMapPlugin';
 import { genId } from '../utils/id';
 import {
   parseMarkdownToTree,
-  serializeTreeToMarkdown,
-  mindmapToMdTree,
-  buildSyncMap,
   MdTreeNode,
   SyncMapEntry,
+  buildSyncMapFromEditorContent,
 } from './markdown-serializer';
 
 export class SyncEngine {
@@ -20,7 +18,6 @@ export class SyncEngine {
   private eventBus: EventBus;
   private mindmapPlugin: MindMapPlugin;
   private updating: 'md' | 'canvas' | null = null;
-  private lastMd = '';
   private syncMap: SyncMapEntry[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -49,34 +46,21 @@ export class SyncEngine {
     this.updating = 'md';
     try {
       const tree = parseMarkdownToTree(md);
-      this.rebuildMindmapFromTree(tree);
-      this.lastMd = md;
+      this.rebuildMindmapFromTree(tree, md);
     } finally {
       this.updating = null;
     }
   }
 
-  getMarkdownFromCanvas(): string {
-    if (this.updating === 'md') return this.lastMd;
-
+  rebuildSyncMap(editorMd: string): void {
     const rootId = this.mindmapPlugin.getRootId();
-    if (!rootId) return '';
-
     const nodes = this.store.getDocument().nodes;
-    const mdTree = mindmapToMdTree(rootId, nodes);
-    const md = serializeTreeToMarkdown(mdTree);
-    this.lastMd = md;
-    this.syncMap = buildSyncMap(md, mdTree);
-    return md;
-  }
-
-  getSyncMap(): SyncMapEntry[] {
-    return this.syncMap;
+    this.syncMap = buildSyncMapFromEditorContent(editorMd, nodes, rootId);
   }
 
   getNodeIdForLine(line: number): string | null {
     for (const entry of this.syncMap) {
-      if (line >= entry.lineStart && line <= entry.lineEnd) {
+      if (entry.line === line) {
         return entry.nodeId;
       }
     }
@@ -85,10 +69,10 @@ export class SyncEngine {
 
   getLineForNodeId(nodeId: string): number | null {
     const entry = this.syncMap.find((e) => e.nodeId === nodeId);
-    return entry ? entry.lineStart : null;
+    return entry !== undefined ? entry.line : null;
   }
 
-  private rebuildMindmapFromTree(tree: MdTreeNode): void {
+  private rebuildMindmapFromTree(tree: MdTreeNode, editorMd: string): void {
     const doc = this.store.getDocument();
     const nodes = doc.nodes;
     const edges = doc.edges;
@@ -101,6 +85,7 @@ export class SyncEngine {
 
     const newNodes: CanvasNode[] = [];
     const newEdges: { id: string; sourceId: string; targetId: string }[] = [];
+    const lineMap: SyncMapEntry[] = [];
 
     const buildNodes = (mdNode: MdTreeNode, parentId?: string): string => {
       const id = genId();
@@ -115,6 +100,10 @@ export class SyncEngine {
         style: { ...DEFAULT_NODE_STYLE, borderRadius: 12, fill: parentId ? '#ffffff' : '#dbeafe' },
         locked: false,
       });
+
+      if (mdNode.sourceLine !== undefined) {
+        lineMap.push({ nodeId: id, line: mdNode.sourceLine });
+      }
 
       if (parentId) {
         newEdges.push({ id: genId(), sourceId: parentId, targetId: id });
@@ -151,6 +140,7 @@ export class SyncEngine {
           });
         }
         this.mindmapPlugin.relayout();
+        this.syncMap = lineMap;
         this.eventBus.emit('sync:canvas-updated');
       },
       undo: () => {
@@ -159,6 +149,7 @@ export class SyncEngine {
         for (const n of removedNodes) this.store.addNode(n);
         for (const e of removedEdges) this.store.addEdge(e);
         this.mindmapPlugin.relayout();
+        this.syncMap = [];
         this.eventBus.emit('sync:canvas-updated');
       },
     };

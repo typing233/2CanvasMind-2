@@ -5,14 +5,16 @@ export interface MdTreeNode {
   depth: number;
   children: MdTreeNode[];
   nodeId?: NodeId;
+  sourceLine?: number;
 }
 
 export function parseMarkdownToTree(md: string): MdTreeNode {
-  const lines = md.split('\n').filter((l) => l.trim());
+  const lines = md.split('\n');
   const root: MdTreeNode = { text: 'Root', depth: 0, children: [] };
   const stack: MdTreeNode[] = [root];
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const headingMatch = line.match(/^(#{1,6})\s+(.+)/);
     const listMatch = line.match(/^(\s*)[-*+]\s+(.+)/);
 
@@ -30,7 +32,7 @@ export function parseMarkdownToTree(md: string): MdTreeNode {
       continue;
     }
 
-    const node: MdTreeNode = { text, depth, children: [] };
+    const node: MdTreeNode = { text, depth, children: [], sourceLine: i };
 
     while (stack.length > 1 && stack[stack.length - 1].depth >= depth) {
       stack.pop();
@@ -48,14 +50,14 @@ export function parseMarkdownToTree(md: string): MdTreeNode {
 
 export function serializeTreeToMarkdown(root: MdTreeNode): string {
   const lines: string[] = [];
-  serializeNode(root, lines, 0);
+  serializeNode(root, lines);
   return lines.join('\n');
 }
 
-function serializeNode(node: MdTreeNode, lines: string[], parentDepth: number): void {
+function serializeNode(node: MdTreeNode, lines: string[]): void {
   if (node.depth === 0 && node.text === 'Root') {
     for (const child of node.children) {
-      serializeNode(child, lines, 0);
+      serializeNode(child, lines);
     }
     return;
   }
@@ -68,7 +70,7 @@ function serializeNode(node: MdTreeNode, lines: string[], parentDepth: number): 
   }
 
   for (const child of node.children) {
-    serializeNode(child, lines, node.depth);
+    serializeNode(child, lines);
   }
 }
 
@@ -94,34 +96,58 @@ export function mindmapToMdTree(
 
 export interface SyncMapEntry {
   nodeId: string;
-  lineStart: number;
-  lineEnd: number;
+  line: number;
 }
 
-export function buildSyncMap(md: string, root: MdTreeNode): SyncMapEntry[] {
+export function buildSyncMapFromEditorContent(
+  md: string,
+  nodes: Record<string, CanvasNode>,
+  rootId: string | null,
+): SyncMapEntry[] {
+  if (!rootId) return [];
+
   const entries: SyncMapEntry[] = [];
   const lines = md.split('\n');
-  let lineIdx = 0;
 
-  function walk(node: MdTreeNode): void {
-    if (!node.nodeId) {
-      for (const child of node.children) walk(child);
-      return;
+  const nodeTexts = collectNodeTextsInOrder(rootId, nodes);
+
+  let nodeIdx = 0;
+  for (let i = 0; i < lines.length && nodeIdx < nodeTexts.length; i++) {
+    const line = lines[i];
+    const headingMatch = line.match(/^#{1,6}\s+(.+)/);
+    const listMatch = line.match(/^\s*[-*+]\s+(.+)/);
+
+    let text: string | null = null;
+    if (headingMatch) {
+      text = headingMatch[1].trim();
+    } else if (listMatch) {
+      text = listMatch[1].trim();
     }
 
-    while (lineIdx < lines.length) {
-      const line = lines[lineIdx];
-      if (line.includes(node.text)) {
-        entries.push({ nodeId: node.nodeId, lineStart: lineIdx, lineEnd: lineIdx });
-        lineIdx++;
-        break;
-      }
-      lineIdx++;
+    if (text !== null && text === nodeTexts[nodeIdx].text) {
+      entries.push({ nodeId: nodeTexts[nodeIdx].id, line: i });
+      nodeIdx++;
     }
-
-    for (const child of node.children) walk(child);
   }
 
-  walk(root);
   return entries;
+}
+
+function collectNodeTextsInOrder(
+  rootId: string,
+  nodes: Record<string, CanvasNode>,
+): { id: string; text: string }[] {
+  const result: { id: string; text: string }[] = [];
+
+  function walk(id: string): void {
+    const node = nodes[id];
+    if (!node) return;
+    result.push({ id, text: (node.data.text as string) || '' });
+    if (node.children) {
+      for (const childId of node.children) walk(childId);
+    }
+  }
+
+  walk(rootId);
+  return result;
 }

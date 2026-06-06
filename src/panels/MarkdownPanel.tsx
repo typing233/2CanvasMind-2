@@ -25,14 +25,16 @@ export function MarkdownPanel({ syncEngine }: Props) {
         const md = update.state.doc.toString();
         syncEngine.onMarkdownChanged(md);
       }
-      if (update.selectionSet && !isUpdatingRef.current && syncEngine) {
+      if (update.selectionSet && !update.docChanged && !isUpdatingRef.current && syncEngine) {
         const pos = update.state.selection.main.head;
         const lineNum = update.state.doc.lineAt(pos).number - 1;
         const nodeId = syncEngine.getNodeIdForLine(lineNum);
         if (nodeId) {
           const current = useCanvasStore.getState().getSelectedNodeIds();
           if (!current.has(nodeId)) {
+            isUpdatingRef.current = true;
             useCanvasStore.getState().setSelection([nodeId]);
+            isUpdatingRef.current = false;
           }
         }
       }
@@ -57,20 +59,23 @@ export function MarkdownPanel({ syncEngine }: Props) {
   }, [syncEngine]);
 
   useEffect(() => {
-    if (!syncEngine || !viewRef.current) return;
+    if (!syncEngine || !viewRef.current || isUpdatingRef.current) return;
     if (selectedNodeIds.size === 0) return;
 
     const nodeId = Array.from(selectedNodeIds)[0];
-    // Rebuild sync map from current canvas state
-    syncEngine.getMarkdownFromCanvas();
     const line = syncEngine.getLineForNodeId(nodeId);
-    if (line !== null && line < viewRef.current.state.doc.lines) {
+    if (line !== null) {
       const view = viewRef.current;
-      const docLine = view.state.doc.line(line + 1);
-      view.dispatch({
-        selection: { anchor: docLine.from },
-        scrollIntoView: true,
-      });
+      const lineCount = view.state.doc.lines;
+      if (line < lineCount) {
+        isUpdatingRef.current = true;
+        const docLine = view.state.doc.line(line + 1);
+        view.dispatch({
+          selection: { anchor: docLine.from },
+          scrollIntoView: true,
+        });
+        isUpdatingRef.current = false;
+      }
     }
   }, [selectedNodeIds, syncEngine]);
 
@@ -83,11 +88,21 @@ export function MarkdownPanel({ syncEngine }: Props) {
   const handleSyncFromMap = () => {
     if (!syncEngine || !viewRef.current) return;
     isUpdatingRef.current = true;
-    const md = syncEngine.getMarkdownFromCanvas();
+
+    const allNodes = useCanvasStore.getState().getDocument().nodes;
+    const mindmapRoot = Object.values(allNodes).find((n) => n.type === 'mindmap' && !n.parentId);
+    if (!mindmapRoot) {
+      isUpdatingRef.current = false;
+      return;
+    }
+
+    const md = serializeCanvasToMd(mindmapRoot.id, allNodes);
     const view = viewRef.current;
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: md },
     });
+
+    syncEngine.rebuildSyncMap(md);
     isUpdatingRef.current = false;
   };
 
@@ -155,4 +170,26 @@ export function MarkdownPanel({ syncEngine }: Props) {
       </div>
     </div>
   );
+}
+
+function serializeCanvasToMd(rootId: string, nodes: Record<string, any>): string {
+  const lines: string[] = [];
+  function walk(id: string, depth: number): void {
+    const node = nodes[id];
+    if (!node) return;
+    const text = (node.data?.text as string) || '';
+    if (depth <= 6) {
+      lines.push(`${'#'.repeat(depth)} ${text}`);
+    } else {
+      const indent = '  '.repeat(depth - 7);
+      lines.push(`${indent}- ${text}`);
+    }
+    if (node.children) {
+      for (const childId of node.children) {
+        walk(childId, depth + 1);
+      }
+    }
+  }
+  walk(rootId, 1);
+  return lines.join('\n');
 }
