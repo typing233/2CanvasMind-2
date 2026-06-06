@@ -51,7 +51,7 @@ export interface IPlugin {
   contributeToolbar?(): ToolbarContribution[];
 
   renderNode?(ctx: CanvasRenderingContext2D, node: CanvasNode, isSelected: boolean): void;
-  renderEdge?(ctx: CanvasRenderingContext2D, edge: CanvasEdge, nodes: Record<string, CanvasNode>): void;
+  renderEdge?(ctx: CanvasRenderingContext2D, edge: CanvasEdge, nodes: Record<string, CanvasNode>, isSelected?: boolean): void;
 
   hitTestNode?(node: CanvasNode, point: Point): boolean;
 

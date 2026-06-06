@@ -79,7 +79,7 @@ export class ConnectorLinesPlugin implements IPluginV2 {
     return false;
   }
 
-  renderEdge(ctx: CanvasRenderingContext2D, edge: CanvasEdge, nodes: Record<string, CanvasNode>): void {
+  renderEdge(ctx: CanvasRenderingContext2D, edge: CanvasEdge, nodes: Record<string, CanvasNode>, isSelected?: boolean): void {
     if (edge.type !== 'connector') return;
     const source = nodes[edge.sourceId];
     const target = nodes[edge.targetId];
@@ -92,8 +92,8 @@ export class ConnectorLinesPlugin implements IPluginV2 {
     const ty = target.position.y + target.size.height / 2;
 
     ctx.save();
-    ctx.strokeStyle = edge.style.stroke;
-    ctx.lineWidth = edge.style.strokeWidth;
+    ctx.strokeStyle = isSelected ? '#3b82f6' : edge.style.stroke;
+    ctx.lineWidth = isSelected ? edge.style.strokeWidth + 2 : edge.style.strokeWidth;
     if (edge.style.dash) ctx.setLineDash(edge.style.dash);
 
     ctx.beginPath();

@@ -97,6 +97,7 @@ export class CanvasEngine {
     const state = useCanvasStore.getState();
     const { nodes, edges } = state.document;
     const selectedNodeIds = state.selectedNodeIds;
+    const selectedEdgeIds = state.selectedEdgeIds;
 
     this.updateSpatialIndex(nodes);
 
@@ -112,11 +113,12 @@ export class CanvasEngine {
 
     for (const edge of Object.values(edges)) {
       if (!visibleEdgeSet.has(edge.id)) continue;
+      const isEdgeSelected = selectedEdgeIds.has(edge.id);
       const plugin = this.plugins.getPluginForEdgeType(edge.type);
       if (plugin?.renderEdge) {
-        plugin.renderEdge(ctx, edge, nodes);
+        plugin.renderEdge(ctx, edge, nodes, isEdgeSelected);
       } else {
-        this.renderer.drawEdge(edge, nodes);
+        this.renderer.drawEdge(edge, nodes, isEdgeSelected);
       }
     }
 

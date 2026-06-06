@@ -15,19 +15,25 @@ interface ContextMenuProps {
 interface MenuState {
   x: number;
   y: number;
-  nodeId: NodeId;
+  nodeId?: NodeId;
+  edgeId?: string;
 }
 
 export function ContextMenu({ commandHistory, onConversionDone }: ContextMenuProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const nodes = useCanvasStore((s) => s.document.nodes);
+  const edges = useCanvasStore((s) => s.document.edges);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       e.preventDefault();
-      const ids = Array.from(useCanvasStore.getState().selectedNodeIds);
-      if (ids.length >= 1) {
-        setMenu({ x: e.clientX, y: e.clientY, nodeId: ids[0] });
+      const state = useCanvasStore.getState();
+      const nodeIds = Array.from(state.selectedNodeIds);
+      const edgeIds = Array.from(state.selectedEdgeIds);
+      if (nodeIds.length >= 1) {
+        setMenu({ x: e.clientX, y: e.clientY, nodeId: nodeIds[0] });
+      } else if (edgeIds.length >= 1) {
+        setMenu({ x: e.clientX, y: e.clientY, edgeId: edgeIds[0] });
       }
     };
     const canvas = document.querySelector('canvas');
@@ -44,12 +50,30 @@ export function ContextMenu({ commandHistory, onConversionDone }: ContextMenuPro
 
   const handleDelete = useCallback(() => {
     if (!menu) return;
+
+    if (menu.edgeId) {
+      const store = useCanvasStore.getState();
+      const edge = store.document.edges[menu.edgeId];
+      if (!edge) return;
+
+      const cmd: ICommand = {
+        id: genId(),
+        description: 'Delete edge',
+        execute: () => useCanvasStore.getState().removeEdge(edge.id),
+        undo: () => useCanvasStore.getState().addEdge(edge),
+      };
+      commandHistory.execute(cmd);
+      setMenu(null);
+      return;
+    }
+
+    if (!menu.nodeId) return;
     const nodeId = menu.nodeId;
     const store = useCanvasStore.getState();
     const node = store.getNode(nodeId);
     if (!node) return;
 
-    const edges = Object.values(store.document.edges)
+    const relEdges = Object.values(store.document.edges)
       .filter((e) => e.sourceId === nodeId || e.targetId === nodeId);
 
     const cmd: ICommand = {
@@ -57,14 +81,14 @@ export function ContextMenu({ commandHistory, onConversionDone }: ContextMenuPro
       description: 'Delete node',
       execute: () => {
         const s = useCanvasStore.getState();
-        for (const e of edges) s.removeEdge(e.id);
+        for (const e of relEdges) s.removeEdge(e.id);
         s.removeNode(nodeId);
         s.setSelection([]);
       },
       undo: () => {
         const s = useCanvasStore.getState();
         s.addNode(node);
-        for (const e of edges) s.addEdge(e);
+        for (const e of relEdges) s.addEdge(e);
       },
     };
     commandHistory.execute(cmd);
@@ -72,20 +96,27 @@ export function ContextMenu({ commandHistory, onConversionDone }: ContextMenuPro
   }, [menu, commandHistory]);
 
   const handleConvert = useCallback((toPrefix: string) => {
-    if (!menu) return;
+    if (!menu || !menu.nodeId) return;
     const store = useCanvasStore.getState();
     const selectedIds = Array.from(store.selectedNodeIds);
-    const selectedNodes = selectedIds.map(id => store.getNode(id)).filter(Boolean) as any[];
-    if (selectedNodes.length === 0) return;
+    if (selectedIds.length === 0) return;
 
-    const fromPrefix = selectedNodes[0].type.split('-')[0];
+    const firstNode = store.getNode(selectedIds[0]);
+    if (!firstNode) return;
+    const fromPrefix = firstNode.type.split('-')[0];
+
+    const allSameType = Object.values(store.document.nodes)
+      .filter(n => n.type.startsWith(fromPrefix));
+    if (allSameType.length === 0) return;
+
+    const allTypeIds = allSameType.map(n => n.id);
+    const relatedEdges = Object.values(store.document.edges)
+      .filter(e => allTypeIds.includes(e.sourceId) || allTypeIds.includes(e.targetId));
+
     const converter = getConverter(fromPrefix, toPrefix);
     if (!converter) return;
 
-    const relatedEdges = Object.values(store.document.edges)
-      .filter(e => selectedIds.includes(e.sourceId) || selectedIds.includes(e.targetId));
-
-    const result = converter(selectedNodes, relatedEdges, store.document.nodes, store.document.edges);
+    const result = converter(allSameType, relatedEdges, store.document.nodes, store.document.edges);
 
     const savedNodes = result.removedNodeIds.map(id => ({ ...store.document.nodes[id] })).filter(Boolean);
     const savedEdges = result.removedEdgeIds.map(id => ({ ...store.document.edges[id] })).filter(Boolean);
@@ -118,7 +149,7 @@ export function ContextMenu({ commandHistory, onConversionDone }: ContextMenuPro
   }, [menu, commandHistory, onConversionDone]);
 
   const handleLock = useCallback(() => {
-    if (!menu) return;
+    if (!menu || !menu.nodeId) return;
     const store = useCanvasStore.getState();
     const node = store.getNode(menu.nodeId);
     if (!node) return;
@@ -136,6 +167,20 @@ export function ContextMenu({ commandHistory, onConversionDone }: ContextMenuPro
 
   if (!menu) return null;
 
+  if (menu.edgeId) {
+    const edge = edges[menu.edgeId];
+    if (!edge) return null;
+    return (
+      <div
+        className="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-[100] text-sm min-w-[160px]"
+        style={{ left: menu.x, top: menu.y }}
+      >
+        <MenuItem label={t('context.delete')} onClick={handleDelete} />
+      </div>
+    );
+  }
+
+  if (!menu.nodeId) return null;
   const node = nodes[menu.nodeId];
   if (!node) return null;
 

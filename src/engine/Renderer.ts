@@ -94,7 +94,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawEdge(edge: CanvasEdge, nodes: Record<string, CanvasNode>): void {
+  drawEdge(edge: CanvasEdge, nodes: Record<string, CanvasNode>, isSelected = false): void {
     const ctx = this.ctx;
     const source = nodes[edge.sourceId];
     const target = nodes[edge.targetId];
@@ -105,8 +105,8 @@ export class Renderer {
       : this.computeSimpleEdge(source, target);
 
     ctx.save();
-    ctx.strokeStyle = edge.style.stroke;
-    ctx.lineWidth = edge.style.strokeWidth;
+    ctx.strokeStyle = isSelected ? '#3b82f6' : edge.style.stroke;
+    ctx.lineWidth = isSelected ? edge.style.strokeWidth + 2 : edge.style.strokeWidth;
     if (edge.style.dash) {
       ctx.setLineDash(edge.style.dash);
     }

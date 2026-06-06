@@ -91,7 +91,7 @@ export class MindMapPlugin implements IPluginV2 {
     ctx.restore();
   }
 
-  renderEdge(ctx: CanvasRenderingContext2D, edge: CanvasEdge, nodes: Record<string, CanvasNode>): void {
+  renderEdge(ctx: CanvasRenderingContext2D, edge: CanvasEdge, nodes: Record<string, CanvasNode>, isSelected?: boolean): void {
     if (edge.type !== 'mindmap') return;
     const source = nodes[edge.sourceId];
     const target = nodes[edge.targetId];
@@ -103,8 +103,8 @@ export class MindMapPlugin implements IPluginV2 {
     const ty = target.position.y + target.size.height / 2;
 
     ctx.save();
-    ctx.strokeStyle = edge.style.stroke;
-    ctx.lineWidth = edge.style.strokeWidth;
+    ctx.strokeStyle = isSelected ? '#3b82f6' : edge.style.stroke;
+    ctx.lineWidth = isSelected ? edge.style.strokeWidth + 2 : edge.style.strokeWidth;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     const cpx = (sx + tx) / 2;

@@ -39,6 +39,9 @@ export function MarkdownPanel({ syncEngine }: Props) {
           }
         }
       }
+      if (update.focusChanged && syncEngine) {
+        syncEngine.setEditorFocused(update.view.hasFocus);
+      }
     });
 
     const state = EditorState.create({

@@ -26,6 +26,7 @@ export class SyncEngine {
   private canvasDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private lastCanvasHash = '';
   private onCanvasToMdCallback: ((md: string) => void) | null = null;
+  private editorFocused = false;
 
   constructor(
     store: CanvasStore,
@@ -44,6 +45,13 @@ export class SyncEngine {
 
   setCanvasToMdCallback(cb: ((md: string) => void) | null): void {
     this.onCanvasToMdCallback = cb;
+  }
+
+  setEditorFocused(focused: boolean): void {
+    this.editorFocused = focused;
+    if (!focused && this.onCanvasToMdCallback) {
+      this.scheduleCanvasToMd();
+    }
   }
 
   onMarkdownChanged(md: string): void {
@@ -101,6 +109,7 @@ export class SyncEngine {
   private scheduleCanvasToMd(): void {
     if (this.updating === 'md') return;
     if (!this.onCanvasToMdCallback) return;
+    if (this.editorFocused) return;
 
     if (this.canvasDebounceTimer) clearTimeout(this.canvasDebounceTimer);
     this.canvasDebounceTimer = setTimeout(() => {
@@ -111,6 +120,7 @@ export class SyncEngine {
   private pushCanvasToMarkdown(): void {
     if (this.updating === 'md') return;
     if (!this.onCanvasToMdCallback) return;
+    if (this.editorFocused) return;
 
     const rootId = this.mindmapPlugin.getRootId();
     if (!rootId) return;

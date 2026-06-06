@@ -30,7 +30,10 @@ export default function App() {
   const { commandHistory, viewport, pluginManager, syncEngine } =
     useMemo(() => {
       const eventBus = new EventBus();
-      const commandHistory = new CommandHistory(() => forceRender((c) => c + 1));
+      const commandHistory = new CommandHistory(() => {
+        forceRender((c) => c + 1);
+        eventBus.emit('sync:canvas-updated');
+      });
       const viewport = new ViewportManager();
 
       const requestRender = () => eventBus.emit('render:request');

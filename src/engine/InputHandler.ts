@@ -103,6 +103,15 @@ export class InputHandler {
       }
     }
 
+    const edgesList = Object.values(state.document.edges);
+    for (let i = edgesList.length - 1; i >= 0; i--) {
+      if (this.hitTester.hitTestEdge(edgesList[i], canvasPt, state.document.nodes)) {
+        state.setSelection([], [edgesList[i].id]);
+        this.requestRender();
+        return;
+      }
+    }
+
     state.setSelection([]);
     this.requestRender();
   };
